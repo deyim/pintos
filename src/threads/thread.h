@@ -15,6 +15,10 @@ enum thread_status
     THREAD_DYING        /* About to be destroyed. */
   };
 
+  //project3 : wait queue //////////////
+static struct list wait_list;
+
+
 /* Thread identifier type.
    You can redefine this to whatever type you like. */
 typedef int tid_t;
@@ -118,6 +122,10 @@ struct thread
 
   struct file *executing_file;
   char file_name[40];
+  ///////////////////////////PROJECT 3////////////////////////////////////////
+  struct list_elem wait_elem; // waiting queue에 들어가는 모든 요소들
+  int64_t sleep_until;       // sleep할 시간
+
   };
 
 /* If false (default), use round-robin scheduler.
@@ -128,7 +136,7 @@ extern bool thread_mlfqs;
 void thread_init (void);
 void thread_start (void);
 
-void thread_tick (void);
+void thread_tick (int64_t tick);
 void thread_print_stats (void);
 
 typedef void thread_func (void *aux);
@@ -156,5 +164,6 @@ void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
-struct thread* thread_found(int thread_id);
+void thread_sleep_until (int64_t ticks_end);
+
 #endif /* threads/thread.h */

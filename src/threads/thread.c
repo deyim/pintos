@@ -11,6 +11,7 @@
 #include "threads/switch.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
+#include "devices/timer.h"
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
@@ -23,6 +24,9 @@
 /* List of processes in THREAD_READY state, that is, processes
    that are ready to run but not actually running. */
 static struct list ready_list;
+
+
+
 
 /* List of all processes.  Processes are added to this list
    when they are first scheduled and removed when they exit. */
@@ -93,6 +97,8 @@ thread_init (void)
   lock_init (&tid_lock);
   list_init (&ready_list);
   list_init (&all_list);
+  /////////project3 ////////////
+  list_init(&wait_list);
 
 
   /* Set up a thread structure for the running thread. */
@@ -100,6 +106,7 @@ thread_init (void)
   init_thread (initial_thread, "main", PRI_DEFAULT);
   initial_thread->status = THREAD_RUNNING;
   initial_thread->tid = allocate_tid ();
+
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
@@ -109,9 +116,7 @@ thread_start (void)
 {
   /* Create the idle thread. */
   struct semaphore start_idle;
-//	printf("THREAD START\n");
   sema_init (&start_idle, 0);
-
   thread_create ("idle", PRI_MIN, idle, &start_idle);
 
 
@@ -125,7 +130,7 @@ thread_start (void)
 /* Called by the timer interrupt handler at each timer tick.
    Thus, this function runs in an external interrupt context. */
 void
-thread_tick (void) 
+thread_tick (int64_t tick) 
 {
   struct thread *t = thread_current ();
 
@@ -138,6 +143,20 @@ thread_tick (void)
 #endif
   else
     kernel_ticks++;
+
+  struct list_elem *e;
+  enum intr_level old_level = intr_disable();
+
+  for( e= list_begin(&wait_list); e!= list_end(&wait_list); e= list_next(e)){
+    struct thread *t = list_entry(e, struct thread, wait_elem);
+    if(t->sleep_until <= tick){
+      t->sleep_until =0;
+      list_remove(&t->wait_elem);
+      thread_unblock(t);
+    }
+  }
+
+  //intr_set_level(old_level);
 
   /* Enforce preemption. */
   if (++thread_ticks >= TIME_SLICE)
@@ -181,10 +200,8 @@ thread_create (const char *name, int priority,
 
   ASSERT (function != NULL);
 
-//	printf("THREAD CREATE %d\n", curThread->tid);
 
   /* Allocate thread. */
-//	printf("palloc to temp\n");
   temp = palloc_get_page (PAL_ZERO);
   if (temp == NULL)
     return TID_ERROR;
@@ -192,7 +209,7 @@ thread_create (const char *name, int priority,
   /* Initialize thread. */
   init_thread (temp, name, priority);
   tid = temp->tid = allocate_tid ();
-//	printf("temp tid: %d\n", tid);
+
   if(tid > 32768)
   {
 	  temp->check_exit =3 ;
@@ -229,13 +246,19 @@ thread_create (const char *name, int priority,
   temp->Parent = curThread;
 
   list_init(&temp->file_descriptor_list);
-//	printf("SEMA INIT temp->wiat_child\n");
+
   sema_init(&temp->wait_child,0);
   list_push_back(&(curThread->child_list),&(temp->child_elem));
   //----------------------------------------------
   temp->executing_file = NULL;
   //temp->file_name = NULL;
   /* Add to run queue. */
+
+
+  ////project 3 ////////////////////////////
+  temp->sleep_until = 0;
+
+
   thread_unblock (temp);
 
 
@@ -255,7 +278,7 @@ thread_block (void)
 {
   ASSERT (!intr_context ());
   ASSERT (intr_get_level () == INTR_OFF);
-//	printf("THREAD BLOCK %d\n", thread_current()->tid);
+
   thread_current ()->status = THREAD_BLOCKED;
   schedule ();
 }
@@ -277,10 +300,6 @@ thread_unblock (struct thread *t)
 
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
-
-
-//	printf("THREAD UNBLOCK %d\n", thread_current()->tid);
-
   list_push_back (&ready_list, &t->elem);
   t->status = THREAD_READY;
   intr_set_level (old_level);
@@ -623,6 +642,16 @@ allocate_tid (void)
 
   return tid;
 }
+void thread_sleep_until (int64_t ticks_end){
+  struct thread *t = thread_current();
+  t->sleep_until = ticks_end;
+
+  list_push_back(&wait_list, &t->wait_elem);
+
+  thread_block();
+}
+
+
 
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
