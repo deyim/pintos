@@ -76,6 +76,9 @@ void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
 struct thread* thread_found(int thread_id);
 
+////////////////project 3 ///////////////
+struct thread* find_highest_prior(void);
+
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
    general and it is possible in this case only because loader.S
@@ -556,8 +559,11 @@ next_thread_to_run (void)
 {
   if (list_empty (&ready_list))
     return idle_thread;
-  else
-    return list_entry (list_pop_front (&ready_list), struct thread, elem);
+  //else
+  //  return list_entry (list_pop_front (&ready_list), struct thread, elem);
+  else{
+    return find_highest_prior();
+  }
 }
 
 /* Completes a thread switch by activating the new thread's page
@@ -651,6 +657,32 @@ void thread_sleep_until (int64_t ticks_end){
   thread_block();
 }
 
+struct thread* 
+find_highest_prior(void){
+  struct thread *now;
+  struct thread *highest = NULL;
+  struct list_elem *e;
+  int max = 0;
+
+  for(e = list_begin(&ready_list);e != list_end(&ready_list);e = list_next(e)){
+    now = list_entry(e,struct thread, elem);
+    if(now->priority >= max){
+      highest = now;
+      max = now->priority;
+    }
+    else{
+      continue;
+    }
+  }
+
+  if(highest == NULL){
+    return NULL;
+  }
+  else{
+    e = list_remove(&highest->elem);
+    return highest;
+  }
+}
 
 
 /* Offset of `stack' member within `struct thread'.
