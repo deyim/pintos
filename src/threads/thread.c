@@ -78,6 +78,7 @@ struct thread* thread_found(int thread_id);
 
 ////////////////project 3 ///////////////
 struct thread* find_highest_prior(void);
+int highest_prior_number(void);
 
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
@@ -265,7 +266,7 @@ thread_create (const char *name, int priority,
   thread_unblock (temp);
 
 
-
+thread_yield();
 
   return tid;
 }
@@ -402,6 +403,8 @@ void
 thread_set_priority (int new_priority) 
 {
   thread_current ()->priority = new_priority;
+  if(highest_prior_number() >= thread_current()->priority)
+    thread_yield();
 }
 
 /* Returns the current thread's priority. */
@@ -657,6 +660,10 @@ void thread_sleep_until (int64_t ticks_end){
   thread_block();
 }
 
+
+/*
+In the ready list, find the thread which has highest priority and then return it.
+*/
 struct thread* 
 find_highest_prior(void){
   struct thread *now;
@@ -681,6 +688,32 @@ find_highest_prior(void){
   else{
     e = list_remove(&highest->elem);
     return highest;
+  }
+}
+
+int
+highest_prior_number(void){
+  struct thread *now;
+  struct thread *highest = NULL;
+  struct list_elem *e;
+  int max = 0;
+
+  for(e = list_begin(&ready_list);e != list_end(&ready_list);e = list_next(e)){
+    now = list_entry(e,struct thread, elem);
+    if(now->priority >= max){
+      highest = now;
+      max = now->priority;
+    }
+    else{
+      continue;
+    }
+  }
+
+  if(highest == NULL){
+    return 0;
+  }
+  else{
+    return highest->priority;
   }
 }
 
