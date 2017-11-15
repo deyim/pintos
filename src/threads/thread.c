@@ -58,6 +58,12 @@ static long long user_ticks;    /* # of timer ticks in user programs. */
 #define TIME_SLICE 4            /* # of timer ticks to give each thread. */
 static unsigned thread_ticks;   /* # of timer ticks since last yield. */
 
+
+#ifndef USERPROG
+//project3//
+  bool thread_prior_aging;
+#endif
+
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
    Controlled by kernel command-line option "-o mlfqs". */
@@ -79,6 +85,7 @@ struct thread* thread_found(int thread_id);
 ////////////////project 3 ///////////////
 struct thread* find_highest_prior(void);
 int highest_prior_number(void);
+void thread_aging(void);
 
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
@@ -165,6 +172,10 @@ thread_tick (int64_t tick)
   /* Enforce preemption. */
   if (++thread_ticks >= TIME_SLICE)
     intr_yield_on_return ();
+
+  //project3//
+  if(thread_prior_aging == true)
+    thread_aging();
 }
 
 /* Prints thread statistics. */
@@ -714,6 +725,17 @@ highest_prior_number(void){
   }
   else{
     return highest->priority;
+  }
+}
+
+void
+thread_aging(void){
+  struct thread *now;
+  struct list_elem *e;
+
+  for(e = list_begin(&ready_list);e != list_end(&ready_list);e = list_next(e)){
+    now = list_entry(e,struct thread, elem);
+    now->priority +=1;
   }
 }
 
