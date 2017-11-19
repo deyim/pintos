@@ -94,6 +94,7 @@ simple_thread_func (void *data_)
       lock_acquire (data->lock);
       *(*data->op)++ = data->id;
       lock_release (data->lock);
+	printf("current priority: %d\n", thread_current()->priority);
       thread_yield ();
     }
 }

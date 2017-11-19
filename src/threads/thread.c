@@ -682,9 +682,18 @@ find_highest_prior(void){
   struct list_elem *e;
   int max = 0;
 
-  for(e = list_begin(&ready_list);e != list_end(&ready_list);e = list_next(e)){
+	e = list_begin(&ready_list);
+	now = list_entry(e, struct thread, elem);
+	highest = now;
+	max = now->priority;
+	e =list_next(e);
+
+
+
+  for(;e != list_end(&ready_list);e = list_next(e)){
     now = list_entry(e,struct thread, elem);
-    if(now->priority >= max){
+    if(now->priority > max){
+
       highest = now;
       max = now->priority;
     }
@@ -693,7 +702,9 @@ find_highest_prior(void){
     }
   }
 
-  if(highest == NULL){
+
+
+if(highest == NULL){
     return NULL;
   }
   else{
