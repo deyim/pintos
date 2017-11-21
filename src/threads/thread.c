@@ -24,8 +24,9 @@
 /* List of processes in THREAD_READY state, that is, processes
    that are ready to run but not actually running. */
 static struct list ready_list;
-
-
+//BSD//
+int ready_lists;
+int cumulative_ticks;
 
 
 /* List of all processes.  Processes are added to this list
@@ -69,6 +70,10 @@ static unsigned thread_ticks;   /* # of timer ticks since last yield. */
    Controlled by kernel command-line option "-o mlfqs". */
 bool thread_mlfqs;
 
+//BSD//
+int load_avg;
+
+
 static void kernel_thread (thread_func *, void *aux);
 
 static void idle (void *aux UNUSED);
@@ -86,6 +91,8 @@ struct thread* thread_found(int thread_id);
 struct thread* find_highest_prior(void);
 int highest_prior_number(void);
 void thread_aging(void);
+int fpa(int op1, int op2, int arith);
+int calculate_prior ();
 
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
@@ -118,6 +125,12 @@ thread_init (void)
   initial_thread->status = THREAD_RUNNING;
   initial_thread->tid = allocate_tid ();
 
+  //BSD//
+  initial_thread->nice = 0;
+  load_avg = 0;
+  ready_lists = 0;
+  cumulative_ticks=0;
+  initial_thread ->recent_cpu = 0;
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
@@ -154,6 +167,7 @@ thread_tick (int64_t tick)
 #endif
   else
     kernel_ticks++;
+  cumulative_ticks++;
 
   struct list_elem *e;
   enum intr_level old_level = intr_disable();
@@ -176,7 +190,37 @@ thread_tick (int64_t tick)
   //project3//
   if(thread_prior_aging == true)
     thread_aging();
+
+  if(thread_mlfqs == true){
+    //recent_cpu 계산
+    t->recent_cpu += 1;
+    if(cumulative_ticks % TIMER_FREQ == 0){
+      t->recent_cpu = fpa(fpa(fpa(load_avg,2,8),fpa(load_avg,2,8)+1,9),thread_get_recent_cpu(),7) + thread_get_nice();
+printf("\n\nload_avg : %d ", load_avg);
+printf("fpa 1  : %d, fpa 2 : %d\n", fpa(fpa(load_avg,59,8),60,10), fpa(ready_lists,60,10));      
+//load_avg = fpa(fpa(thread_get_load_avg(),59,8),60,10) + fpa(ready_lists,60,10);
+load_avg = fpa(fpa(load_avg,59,8),60,10) + fpa(ready_lists,60,10);
+printf("cumulative_ticks : %d load_avg : %d, ready_lists : %d\n",cumulative_ticks, load_avg, ready_lists);
+    }
+    if(cumulative_ticks % TIME_SLICE == 0){
+      t->priority = calculate_prior();
+    }
+
+
+  }
+
+  ///////////////
+  // 추가해야하는 함수
+  // calcuate_recent_cpu 
+  // calculate_load_avg
+  // ticks/time_slice == 0 일때의 calculate_prior
+  // set_nice = calcuate_prior()
+  ///////////
+
 }
+  
+
+
 
 /* Prints thread statistics. */
 void
@@ -273,11 +317,14 @@ thread_create (const char *name, int priority,
   ////project 3 ////////////////////////////
   temp->sleep_until = 0;
 
+  //BSD///
+  temp->nice = thread_current()-> nice;
+
 
   thread_unblock (temp);
 
 
-thread_yield();
+  thread_yield();
 
   return tid;
 }
@@ -317,6 +364,7 @@ thread_unblock (struct thread *t)
   ASSERT (t->status == THREAD_BLOCKED);
   list_push_back (&ready_list, &t->elem);
   t->status = THREAD_READY;
+  ready_lists += 1;
   intr_set_level (old_level);
 }
 
@@ -369,6 +417,8 @@ thread_exit (void)
      when it calls thread_schedule_tail(). */
   intr_disable ();
   list_remove (&thread_current()->allelem);
+  if(thread_current()->status == THREAD_RUNNING || thread_current()->status == THREAD_READY)
+    ready_lists -= 1;
   thread_current ()->status = THREAD_DYING;
   schedule ();
   NOT_REACHED ();
@@ -385,8 +435,10 @@ thread_yield (void)
   ASSERT (!intr_context ());
 
   old_level = intr_disable ();
-  if (cur != idle_thread) 
+  if (cur != idle_thread) {
     list_push_back (&ready_list, &cur->elem);
+    //ready_lists += 1;
+  }
   cur->status = THREAD_READY;
   schedule ();
   intr_set_level (old_level);
@@ -429,31 +481,31 @@ thread_get_priority (void)
 void
 thread_set_nice (int nice UNUSED) 
 {
-  /* Not yet implemented. */
+  thread_current() -> nice = nice;
+  //calculate_nice -> thread_set_priority
 }
 
 /* Returns the current thread's nice value. */
 int
 thread_get_nice (void) 
 {
-  /* Not yet implemented. */
-  return 0;
+  return thread_current() -> nice;
 }
 
 /* Returns 100 times the system load average. */
 int
 thread_get_load_avg (void) 
 {
-  /* Not yet implemented. */
-  return 0;
+//printf("----------thread_get_load_avg-------\n");
+//	printf("LOAD AVG: 100배의 0.2 %d, 0.2의 100배 %d\n",fpa(fpa(load_avg,0,2),100,8), fpa(fpa(load_avg,100,8),0,2));
+  return fpa(fpa(load_avg,0,2),100,8);
 }
 
 /* Returns 100 times the current thread's recent_cpu value. */
 int
 thread_get_recent_cpu (void) 
 {
-  /* Not yet implemented. */
-  return 0;
+  return fpa(fpa(thread_current()->recent_cpu,0,2),100,8);
 }
 
 /* Idle thread.  Executes when no other thread is ready to run.
@@ -605,7 +657,7 @@ thread_schedule_tail (struct thread *prev)
 
   /* Mark us as running. */
   cur->status = THREAD_RUNNING;
-
+	ready_lists+=1;
   /* Start new time slice. */
   thread_ticks = 0;
 
@@ -665,7 +717,8 @@ allocate_tid (void)
 void thread_sleep_until (int64_t ticks_end){
   struct thread *t = thread_current();
   t->sleep_until = ticks_end;
-
+    if(t -> status == THREAD_RUNNING || t-> status == THREAD_READY)
+    ready_lists -= 1;
   list_push_back(&wait_list, &t->wait_elem);
 
   thread_block();
@@ -749,6 +802,63 @@ thread_aging(void){
     now->priority +=1;
   }
 }
+
+int
+fpa(int op1, int op2, int arith){
+int f = 16384;
+//printf("op1 : %d, op2 : %d\n",op1, op2);
+//printf("arith 2 : %d\n", (op1 + (f/2))/f);
+//printf("arith 8 : %d\n", op1 * op2);
+  switch(arith){
+    case 0:
+      return op1 * f;
+      break;
+    case 1:
+      return op1 / f;
+      break;
+    case 2:
+      if(op1 >= 0){
+        return (op1 +( f/2))/f;
+      }
+      else{
+        return (op1 - (f/2))/f;
+      }
+      break;
+    case 3:
+      return op1 + op2;
+      break;
+    case 4:
+      return op1 - op2;
+      break;
+    case 5:
+      return op1 + (op2*f);
+      break;
+    case 6:
+      return op1 - (op2*f);
+      break;      
+    case 7:
+      return ((int64_t)op1*op2)/f;
+      break;
+    case 8:
+      return op1 * op2;
+      break;
+    case 9:
+      return ((int64_t)op1*f)/op2;
+      break;
+    case 10:
+      return op1/op2;
+      break;
+  }
+
+}
+
+int
+calculate_prior (){
+  int cal;
+  cal = PRI_MAX -(fpa(thread_current()->recent_cpu,4,10)) -(thread_current()->nice * 2);
+  return cal;
+}
+
 
 
 /* Offset of `stack' member within `struct thread'.

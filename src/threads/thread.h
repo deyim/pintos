@@ -131,6 +131,10 @@ struct thread
   struct list_elem wait_elem; // waiting queue에 들어가는 모든 요소들
   int64_t sleep_until;       // sleep할 시간
 
+  ////for BSD////
+  int nice;
+  int recent_cpu;
+
   };
 
 /* If false (default), use round-robin scheduler.
