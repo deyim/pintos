@@ -25,8 +25,9 @@
    that are ready to run but not actually running. */
 static struct list ready_list;
 //BSD//
-int ready_lists;
+
 int cumulative_ticks;
+int check_ready_lists();
 
 
 /* List of all processes.  Processes are added to this list
@@ -128,7 +129,7 @@ thread_init (void)
   //BSD//
   initial_thread->nice = 0;
   load_avg = 0;
-  ready_lists = 0;
+
   cumulative_ticks=0;
   initial_thread ->recent_cpu = 0;
 }
@@ -157,7 +158,7 @@ void
 thread_tick (int64_t tick) 
 {
   struct thread *t = thread_current ();
-
+  int now_ready_lists=0;
   /* Update statistics. */
   if (t == idle_thread)
     idle_ticks++;
@@ -193,14 +194,15 @@ thread_tick (int64_t tick)
 
   if(thread_mlfqs == true){
     //recent_cpu 계산
+    now_ready_lists = check_ready_lists();
     t->recent_cpu += 1;
     if(cumulative_ticks % TIMER_FREQ == 0){
       t->recent_cpu = fpa(fpa(fpa(load_avg,2,8),fpa(load_avg,2,8)+1,9),thread_get_recent_cpu(),7) + thread_get_nice();
-printf("\n\nload_avg : %d ", load_avg);
-printf("fpa 1  : %d, fpa 2 : %d\n", fpa(fpa(load_avg,59,8),60,10), fpa(ready_lists,60,10));      
-//load_avg = fpa(fpa(thread_get_load_avg(),59,8),60,10) + fpa(ready_lists,60,10);
-load_avg = fpa(fpa(load_avg,59,8),60,10) + fpa(ready_lists,60,10);
-printf("cumulative_ticks : %d load_avg : %d, ready_lists : %d\n",cumulative_ticks, load_avg, ready_lists);
+
+load_avg = load_avg*59/60 + fpa(now_ready_lists,0,0)/60;
+//load_avg = fpa(load_avg*59,60,10) + fpa(now_ready_lists,60,10);
+//load_avg = fpa(fpa(load_avg,59,8),60,10) +(now_ready_lists,60,10);
+//printf("load_avg : %d, check_ready_lists() : %d\n",load_avg,now_ready_lists);
     }
     if(cumulative_ticks % TIME_SLICE == 0){
       t->priority = calculate_prior();
@@ -364,7 +366,7 @@ thread_unblock (struct thread *t)
   ASSERT (t->status == THREAD_BLOCKED);
   list_push_back (&ready_list, &t->elem);
   t->status = THREAD_READY;
-  ready_lists += 1;
+
   intr_set_level (old_level);
 }
 
@@ -418,7 +420,7 @@ thread_exit (void)
   intr_disable ();
   list_remove (&thread_current()->allelem);
   if(thread_current()->status == THREAD_RUNNING || thread_current()->status == THREAD_READY)
-    ready_lists -= 1;
+
   thread_current ()->status = THREAD_DYING;
   schedule ();
   NOT_REACHED ();
@@ -498,7 +500,12 @@ thread_get_load_avg (void)
 {
 //printf("----------thread_get_load_avg-------\n");
 //	printf("LOAD AVG: 100배의 0.2 %d, 0.2의 100배 %d\n",fpa(fpa(load_avg,0,2),100,8), fpa(fpa(load_avg,100,8),0,2));
-  return fpa(fpa(load_avg,0,2),100,8);
+ // return fpa(fpa(load_avg,0,2),100,8);
+  if(load_avg * 100 < 0)
+	return (load_avg * 100/16384 - 1/2);
+  else
+	return (load_avg * 100/16384 + 1/2);
+ // return fpa(load_avg*100,0,2);
 }
 
 /* Returns 100 times the current thread's recent_cpu value. */
@@ -657,7 +664,7 @@ thread_schedule_tail (struct thread *prev)
 
   /* Mark us as running. */
   cur->status = THREAD_RUNNING;
-	ready_lists+=1;
+
   /* Start new time slice. */
   thread_ticks = 0;
 
@@ -718,7 +725,7 @@ void thread_sleep_until (int64_t ticks_end){
   struct thread *t = thread_current();
   t->sleep_until = ticks_end;
     if(t -> status == THREAD_RUNNING || t-> status == THREAD_READY)
-    ready_lists -= 1;
+
   list_push_back(&wait_list, &t->wait_elem);
 
   thread_block();
@@ -859,6 +866,21 @@ calculate_prior (){
   return cal;
 }
 
+int
+check_ready_lists(){
+  struct list_elem *e;
+  struct thread *thread;
+  int ready_lists=0;
+  for( e= list_begin(&all_list); e != list_end(&all_list) ; e = list_next(e)){
+    thread = list_entry(e, struct thread, allelem);
+	if(thread != idle_thread && (thread->status == THREAD_RUNNING || thread->status == THREAD_READY))
+      ready_lists++;
+    else
+      continue;
+  }
+
+  return ready_lists;
+}
 
 
 /* Offset of `stack' member within `struct thread'.

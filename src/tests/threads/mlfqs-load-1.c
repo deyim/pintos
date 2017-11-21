@@ -36,8 +36,8 @@ test_mlfqs_load_1 (void)
       ASSERT (load_avg >= 0);
       elapsed = timer_elapsed (start_time) / TIMER_FREQ;
 	k++;
-	if(k%100000==0) 
-		printf("MLFQS function load avg: %d, elapsed: %d\n", load_avg, elapsed);
+//	if(k%100000==0) 
+//		printf("MLFQS function load avg: %d, elapsed: %d\n", load_avg, elapsed);
       if (load_avg > 50){
         	printf("BREAK!!!!!\n");
 		break;
@@ -46,9 +46,11 @@ test_mlfqs_load_1 (void)
         fail ("load average is %d.%02d "
               "but should be between 0 and 1 (after %d seconds)",
               load_avg / 100, load_avg % 100, elapsed);
-      else if (elapsed > 45)
-        fail ("load average stayed below 0.5 for more than 45 seconds");
+      else if (elapsed > 45){
+        printf("now load_avg : %d\n",load_avg);
+	fail ("load average stayed below 0.5 for more than 45 seconds");
     }
+}
 
   if (elapsed < 38)
     fail ("load average took only %d seconds to rise above 0.5", elapsed);
