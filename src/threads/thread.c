@@ -94,6 +94,8 @@ int highest_prior_number(void);
 void thread_aging(void);
 int fpa(int op1, int op2, int arith);
 int calculate_prior ();
+void calculate_recent_cpu();
+void update_recent_cpu();
 
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
@@ -195,11 +197,11 @@ thread_tick (int64_t tick)
   if(thread_mlfqs == true){
     //recent_cpu 계산
     now_ready_lists = check_ready_lists();
-    t->recent_cpu += 1;
+    update_recent_cpu();
     if(cumulative_ticks % TIMER_FREQ == 0){
-      t->recent_cpu = fpa(fpa(fpa(load_avg,2,8),fpa(load_avg,2,8)+1,9),thread_get_recent_cpu(),7) + thread_get_nice();
-
-load_avg = load_avg*59/60 + fpa(now_ready_lists,0,0)/60;
+      //t->recent_cpu = fpa(fpa(fpa(load_avg,2,8),fpa(load_avg,2,8)+1,9),thread_get_recent_cpu(),7) + thread_get_nice();
+      calculate_recent_cpu();
+      load_avg = load_avg*59/60 + fpa(now_ready_lists,0,0)/60;
 //load_avg = fpa(load_avg*59,60,10) + fpa(now_ready_lists,60,10);
 //load_avg = fpa(fpa(load_avg,59,8),60,10) +(now_ready_lists,60,10);
 //printf("load_avg : %d, check_ready_lists() : %d\n",load_avg,now_ready_lists);
@@ -512,7 +514,17 @@ thread_get_load_avg (void)
 int
 thread_get_recent_cpu (void) 
 {
-  return fpa(fpa(thread_current()->recent_cpu,0,2),100,8);
+  int now_recent_cpu = thread_current()-> recent_cpu;
+//	printf("\nnow_recent_cpu: %d \n", now_recent_cpu);
+//  printf("to return %d\n",now_recent_cpu*100/16384 + 1/2);
+	
+  if(now_recent_cpu * 100 < 0)
+	return (now_recent_cpu * 100/16384 - 1/2);
+  else
+	return (now_recent_cpu * 100/16384 + 1/2);
+  //return (now_recent_cpu*100/16384 + 1/2);
+	//return fpa(now_recent_cpu,0,2)*100;  
+//return fpa(fpa(thread_current()->recent_cpu,0,2),100,8);
 }
 
 /* Idle thread.  Executes when no other thread is ready to run.
@@ -882,6 +894,42 @@ check_ready_lists(){
   return ready_lists;
 }
 
+void
+calculate_recent_cpu(){
+  struct list_elem *e;
+  struct thread *thread;
+
+  for( e = list_begin(&all_list); e != list_end(&all_list); e = list_next(e)){
+    thread = list_entry(e, struct thread, allelem);
+      if(thread -> status == THREAD_RUNNING || thread->status == THREAD_BLOCKED || thread->status == THREAD_READY){
+	int temp1, temp2, temp3, temp4;
+	temp1 = 2*load_avg;
+	temp2 = ((int64_t)temp1)*16384 / (2*load_avg+fpa(1,0,0));
+	temp3 = ((int64_t)temp2) * thread->recent_cpu/16384;
+	//temp2 = temp1 * thread->recent_cpu;
+	//temp3 = 2*load_avg+fpa(1,0,0);
+	//temp4 = (int64_t)(temp2)/temp3;
+	temp4 = temp3+ fpa(thread->nice,0,0);
+	//printf("%d %d %d %d\n", temp1, temp2, temp3, temp4);
+	thread->recent_cpu = temp4;        
+//thread->recent_cpu =(int64_t)(((int64_t)(2*load_avg)*thread->recent_cpu)) / (2*load_avg + fpa(1, 0,0)) + fpa(thread->nice,0,0);
+    }
+
+  }
+}
+
+void 
+update_recent_cpu(){
+struct list_elem *e;
+  struct thread *thread;
+
+  for( e = list_begin(&all_list); e != list_end(&all_list); e = list_next(e)){
+    thread = list_entry(e, struct thread, allelem);
+      if(thread -> status == THREAD_RUNNING){
+        thread->recent_cpu += fpa(1,0,0);
+      }
+  }
+}
 
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
