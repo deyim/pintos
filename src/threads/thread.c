@@ -96,6 +96,7 @@ int fpa(int op1, int op2, int arith);
 int calculate_prior ();
 void calculate_recent_cpu();
 void update_recent_cpu();
+void calculate_every_prior();
 
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
@@ -207,7 +208,8 @@ thread_tick (int64_t tick)
 //printf("load_avg : %d, check_ready_lists() : %d\n",load_avg,now_ready_lists);
     }
     if(cumulative_ticks % TIME_SLICE == 0){
-      t->priority = calculate_prior();
+      //t->priority = calculate_prior();
+      calculate_every_prior();
     }
 
 
@@ -485,8 +487,14 @@ thread_get_priority (void)
 void
 thread_set_nice (int nice UNUSED) 
 {
+  enum intr_level old_level = intr_disable();
+
   thread_current() -> nice = nice;
-  //calculate_nice -> thread_set_priority
+  thread_current() -> priority = calculate_prior();
+  if(running_thread()->priority <= highest_prior_number())
+    thread_yield();
+
+  intr_set_level(old_level);
 }
 
 /* Returns the current thread's nice value. */
@@ -873,10 +881,22 @@ int f = 16384;
 
 int
 calculate_prior (){
+
   int cal;
-  cal = PRI_MAX -(fpa(thread_current()->recent_cpu,4,10)) -(thread_current()->nice * 2);
+  cal = PRI_MAX -(fpa(thread_current()->recent_cpu,4,10)/16384) -(thread_current()->nice * 2);
   return cal;
 }
+void 
+calculate_every_prior(){
+  struct list_elem *e;
+  struct thread *thread;
+
+for( e= list_begin(&all_list); e != list_end(&all_list) ; e = list_next(e)){
+    thread = list_entry(e, struct thread, allelem);
+    thread->priority = PRI_MAX -(fpa(thread->recent_cpu,4,10)/16384) -(thread->nice * 2);
+  }
+}
+
 
 int
 check_ready_lists(){
