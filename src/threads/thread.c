@@ -200,15 +200,10 @@ thread_tick (int64_t tick)
     now_ready_lists = check_ready_lists();
     update_recent_cpu();
     if(cumulative_ticks % TIMER_FREQ == 0){
-      //t->recent_cpu = fpa(fpa(fpa(load_avg,2,8),fpa(load_avg,2,8)+1,9),thread_get_recent_cpu(),7) + thread_get_nice();
       calculate_recent_cpu();
       load_avg = load_avg*59/60 + fpa(now_ready_lists,0,0)/60;
-//load_avg = fpa(load_avg*59,60,10) + fpa(now_ready_lists,60,10);
-//load_avg = fpa(fpa(load_avg,59,8),60,10) +(now_ready_lists,60,10);
-//printf("load_avg : %d, check_ready_lists() : %d\n",load_avg,now_ready_lists);
     }
     if(cumulative_ticks % TIME_SLICE == 0){
-      //t->priority = calculate_prior();
       calculate_every_prior();
     }
 
@@ -316,7 +311,6 @@ thread_create (const char *name, int priority,
   list_push_back(&(curThread->child_list),&(temp->child_elem));
   //----------------------------------------------
   temp->executing_file = NULL;
-  //temp->file_name = NULL;
   /* Add to run queue. */
 
 
@@ -523,16 +517,11 @@ int
 thread_get_recent_cpu (void) 
 {
   int now_recent_cpu = thread_current()-> recent_cpu;
-//	printf("\nnow_recent_cpu: %d \n", now_recent_cpu);
-//  printf("to return %d\n",now_recent_cpu*100/16384 + 1/2);
 	
   if(now_recent_cpu * 100 < 0)
 	return (now_recent_cpu * 100/16384 - 1/2);
   else
 	return (now_recent_cpu * 100/16384 + 1/2);
-  //return (now_recent_cpu*100/16384 + 1/2);
-	//return fpa(now_recent_cpu,0,2)*100;  
-//return fpa(fpa(thread_current()->recent_cpu,0,2),100,8);
 }
 
 /* Idle thread.  Executes when no other thread is ready to run.
@@ -652,8 +641,6 @@ next_thread_to_run (void)
 {
   if (list_empty (&ready_list))
     return idle_thread;
-  //else
-  //  return list_entry (list_pop_front (&ready_list), struct thread, elem);
   else{
     return find_highest_prior();
   }
@@ -833,9 +820,6 @@ thread_aging(void){
 int
 fpa(int op1, int op2, int arith){
 int f = 16384;
-//printf("op1 : %d, op2 : %d\n",op1, op2);
-//printf("arith 2 : %d\n", (op1 + (f/2))/f);
-//printf("arith 8 : %d\n", op1 * op2);
   switch(arith){
     case 0:
       return op1 * f;
@@ -926,15 +910,9 @@ calculate_recent_cpu(){
 	temp1 = 2*load_avg;
 	temp2 = ((int64_t)temp1)*16384 / (2*load_avg+fpa(1,0,0));
 	temp3 = ((int64_t)temp2) * thread->recent_cpu/16384;
-	//temp2 = temp1 * thread->recent_cpu;
-	//temp3 = 2*load_avg+fpa(1,0,0);
-	//temp4 = (int64_t)(temp2)/temp3;
 	temp4 = temp3+ fpa(thread->nice,0,0);
-	//printf("%d %d %d %d\n", temp1, temp2, temp3, temp4);
 	thread->recent_cpu = temp4;        
-//thread->recent_cpu =(int64_t)(((int64_t)(2*load_avg)*thread->recent_cpu)) / (2*load_avg + fpa(1, 0,0)) + fpa(thread->nice,0,0);
     }
-
   }
 }
 
@@ -950,7 +928,6 @@ struct list_elem *e;
       }
   }
 }
-
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
